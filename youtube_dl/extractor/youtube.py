@@ -10,6 +10,10 @@ import random
 import re
 import time
 import traceback
+import urllib2
+import time
+from ..selenium import webdriver
+from ..webdriver_manager.chrome import ChromeDriverManager
 
 from .common import InfoExtractor, SearchInfoExtractor
 from ..jsinterp import JSInterpreter
@@ -2091,8 +2095,26 @@ class YoutubeIE(YoutubeBaseInfoExtractor):
                 % re.escape(count_name),
                 video_webpage, count_name, default=None))
 
+        def scrollDown(pause, driver):
+            lastHeight = driver.execute_script("return document.body.scrollHeight")
+            while True:
+                driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                time.sleep(pause)
+                newHeight = driver.execute_script("return document.body.scrollHeight")
+                if newHeight == lastHeight:
+                    break
+                lastHeight = newHeight
+
+        def _extract_count_comment(url):
+            driver = webdriver.Chrome(ChromeDriverManager().install())
+            driver.get(url)
+            scrollDown(3, driver)
+            comment_class = driver.find_element_by_class_name('count-text')
+            return(str_to_int(''.join([n for n in comment_class.text if n.isdigit()])))
+
         like_count = _extract_count('like')
         dislike_count = _extract_count('dislike')
+        comment_count = _extract_count_comment(proto + '://www.youtube.com/watch?v=%s' % video_id)
 
         if view_count is None:
             view_count = str_to_int(self._search_regex(
@@ -2203,6 +2225,7 @@ class YoutubeIE(YoutubeBaseInfoExtractor):
             'like_count': like_count,
             'dislike_count': dislike_count,
             'average_rating': float_or_none(video_info.get('avg_rating', [None])[0]),
+            'comment_count': comment_count,
             'formats': formats,
             'is_live': is_live,
             'start_time': start_time,
